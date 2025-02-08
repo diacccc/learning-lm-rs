@@ -1,3 +1,5 @@
+use rand::distributions::DistMap;
+
 use crate::tensor::Tensor;
 
 // get (row) vectors from a 2D table given a list of indices
@@ -71,12 +73,23 @@ pub fn masked_softmax(y: &mut Tensor<f32>) {
 }
 
 pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: f32) {
-    todo!("实现 rms_norm，计算前做一些必要的检查会帮助你后续调试")
+    assert!(x.size() == y.size());
+    assert!(x.shape() == y.shape());
+    let dim0 = x.shape()[x.shape().len() - 1];
+    let dim1 = x.size() / dim0;
+    for i in 0..dim1 {
+        let start = i * dim0;
+        let x_i = &x.data()[start..][..dim0];
+        let y_i = &mut unsafe { y.data_mut() }[start..][..dim0];
+        let f = (x_i.iter().map(|x_ii| x_ii * x_ii).sum::<f32>() / dim0 as f32 + epsilon).sqrt();
+        y_i.iter_mut().zip(
+            x_i.iter().zip(
+                w.data().iter()
+            ).map(|(x_ii,w_i)| x_ii * w_i / f)
+        ).for_each(|(y_ii,x_ii)|*y_ii = x_ii);
+    }
 }
 
-pub fn sigmoid(x: f32) -> f32 {
-    1.0 / (1.0 + (-x).exp())
-}
 // y = silu(x) * y
 // hint: this is an element-wise operation
 pub fn swiglu(y: &mut Tensor<f32>, x: &Tensor<f32>) {
@@ -87,14 +100,38 @@ pub fn swiglu(y: &mut Tensor<f32>, x: &Tensor<f32>) {
     let _x = x.data();
 
     for i in 0..len {
-        _y[i] *= sigmoid(_x[i] * _x[i]);
+        _y[i] *= _x[i] / (1.0 + (-_x[i]).exp());
     }
 }
 
 // C = beta * C + alpha * A @ B^T
 // hint: You don't need to do an explicit transpose of B
 pub fn matmul_transb(c: &mut Tensor<f32>, beta: f32, a: &Tensor<f32>, b: &Tensor<f32>, alpha: f32) {
-    todo!("实现 matmul_transb，计算前做一些必要的检查会帮助你后续调试");
+    // Ensure dimensions are compatible
+    assert!(a.shape()[1] == b.shape()[1]);
+    assert!(a.shape()[0] == c.shape()[0]);
+    assert!(b.shape()[0] == c.shape()[1]);
+
+    let dim0 = c.shape()[0];
+    let dim1 = c.shape()[1];
+
+    let c_ = unsafe{ c.data_mut() };
+    let a_ = a.data();
+    let bt = b.transpose();
+    let b_ = bt.data();
+
+    
+    for i in 0..dim0 {
+        for j in 0..dim1 {
+            let mut sum = 0.0;
+            for k in 0..a.shape()[1] {
+                sum += a_[i * a.shape()[1] + k] * b_[k * bt.shape()[1] + j];
+            }
+            c_[i * dim1 + j] = beta * c_[i * dim1 + j] + alpha * sum;
+            // print!("{} ", c_[i * dim0 + j]);
+        }
+    }
+
 }
 
 // Dot product of two tensors (treated as vectors)

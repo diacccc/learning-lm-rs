@@ -62,6 +62,21 @@ impl<T: Copy + Clone + Default> Tensor<T> {
         }
     }
 
+    pub fn transpose(&self) -> Self {
+        assert!(self.shape.len() == 2, "Transpose only supports 2D tensors");
+        let (rows, cols) = (self.shape[0], self.shape[1]);
+        let mut transposed_data = vec![T::default(); self.length];
+        let data = self.data();
+
+        for i in 0..rows {
+            for j in 0..cols {
+                transposed_data[j * rows + i] = data[i * cols + j];
+            }
+        }
+
+        Tensor::new(transposed_data, &vec![cols, rows])
+    }
+
 
 }
 
